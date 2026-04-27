@@ -1,5 +1,5 @@
 import requests
-import youtube_dl
+import yt_dlp
 from bs4 import BeautifulSoup
 
 
@@ -106,15 +106,19 @@ class SoundCloud:
                  "title": "title",
                  'webpage_url': "url"}
         info = {}
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             meta = ydl.extract_info(track_url, download=False)
             for k, v in kmaps.items():
-                info[v] = meta[k]
-            info["uri"] = meta["formats"][-1]["url"]
-            if prefered_ext:
-                for f in meta["formats"]:
-                    if f["ext"] == prefered_ext:
-                        info["uri"] = f["url"]
-                        break
+                info[v] = meta.get(k)
+            formats = meta.get("formats") or []
+            if formats:
+                info["uri"] = formats[-1]["url"]
+                if prefered_ext:
+                    for f in formats:
+                        if f.get("ext") == prefered_ext:
+                            info["uri"] = f["url"]
+                            break
+            else:
+                info["uri"] = meta.get("url")
         return info
 
