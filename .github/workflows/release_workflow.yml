@@ -1,0 +1,13 @@
+name: Release Alpha
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  release_alpha:
+    uses: OpenVoiceOS/gh-automations/.github/workflows/release_workflow.yml@dev
+    secrets:
+      PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+      MATRIX_TOKEN: ${{ secrets.MATRIX_TOKEN }}
