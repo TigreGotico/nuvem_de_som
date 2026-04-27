@@ -7,7 +7,10 @@ on:
 
 jobs:
   publish_stable:
-    uses: OpenVoiceOS/gh-automations/.github/workflows/publish_stable.yml@dev
+    uses: OpenVoiceOS/gh-automations/.github/workflows/publish-stable.yml@dev
     secrets:
       PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
       MATRIX_TOKEN: ${{ secrets.MATRIX_TOKEN }}
+    with:
+      version_file: nuvem_de_som/version.py
+      package_name: nuvem_de_som

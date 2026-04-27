@@ -1,12 +1,9 @@
-name: Conventional Label
-
+name: conventional-release-labels
 on:
-  pull_request:
-    types: [opened, synchronize, edited]
-
+  pull_request_target:
+    types: [opened, edited]
 jobs:
-  conventional_label:
-    uses: OpenVoiceOS/gh-automations/.github/workflows/conventional-label.yaml@dev
-    secrets:
-      PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-      MATRIX_TOKEN: ${{ secrets.MATRIX_TOKEN }}
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: bcoe/conventional-release-labels@v1
