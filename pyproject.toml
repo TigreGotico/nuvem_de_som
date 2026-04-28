@@ -13,7 +13,11 @@ dependencies = ["bs4", "requests"]
 
 [project.optional-dependencies]
 yt-dlp = ["yt-dlp"]
+cli = ["click"]
 test = ["pytest"]
+
+[project.scripts]
+nds = "nuvem_de_som.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/OpenJarbas/nuvem_de_som"
