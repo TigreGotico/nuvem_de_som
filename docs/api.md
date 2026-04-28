@@ -1,81 +1,256 @@
 # nuvem_de_som API
 
-`nuvem_de_som` searches SoundCloud by scraping its public HTML pages and extracts audio streams via `yt-dlp`.
+`nuvem_de_som` searches, streams, and downloads SoundCloud content.
 
-> **Note:** SoundCloud's HTML markup can change without notice. Stream extraction requires `yt-dlp` and an active internet connection.
+## Architecture
 
-## SoundCloud
-
-All methods are static.
-
-### `search(query, extract_streams=True)`
-
-Combined search: yields tracks from the top people result, the top set result, and then individual tracks.
-
-```python
-from nuvem_de_som import SoundCloud
-
-for track in SoundCloud.search("heavy metal", extract_streams=False):
-    print(track["title"], track["url"])
+```
+SoundCloudBase  (abstract)
+├── SoundCloudAPI    — internal API v2, full metadata, recommended
+├── SoundCloudHTML   — HTML scraper, no extra deps
+├── SoundCloudYTDLP  — yt-dlp backed, best stream resolution
+└── SoundCloud       — orchestrator subclass, tries API → yt-dlp → HTML
 ```
 
-### `search_tracks(query, extract_streams=True)`
-
-Search by track name.
+All backends implement the same interface.  All track dicts share the same
+canonical key schema regardless of backend:
 
 ```python
-for track in SoundCloud.search_tracks("piratech nuclear chill"):
-    print(track)
+{
+    "title":      str,        # track title
+    "url":        str,        # SoundCloud permalink
+    "artist":     str,        # display name ("" when not available)
+    "artist_url": str,        # profile URL  ("" when not available)
+    "image":      str,        # artwork URL  ("" when not available)
+    "duration":   int | None, # seconds      (None when not available)
+}
 ```
 
-### `search_people(query, extract_streams=True)`
+> **Note:** `SoundCloudYTDLP.search_people()` and `search_sets()` yield nothing —
+> yt-dlp has no people/set search endpoint.
+>
+> `SoundCloudHTML.search_tracks()` / `search_people()` / `search_sets()` return
+> limited metadata from SoundCloud's search HTML (title + URL only); use
+> `get_tracks()` on an artist/set page for full metadata including duration.
 
-Search by artist/user name. Each result is a dict with:
-- `artist` — artist name
-- `url` — profile URL
-- `tracks` — list of track dicts for that artist
+---
+
+## Quick start
 
 ```python
-for person in SoundCloud.search_people("piratech"):
-    print(person["artist"])
-    for t in person["tracks"]:
-        print(" ", t["title"])
+from nuvem_de_som import SoundCloud, SoundCloudAPI, SoundCloudHTML, SoundCloudYTDLP
+
+sc = SoundCloud()        # orchestrator: API → yt-dlp → HTML fallback
+sc = SoundCloudAPI()     # API only (full metadata, recommended)
+sc = SoundCloudHTML()    # HTML scraper only (no extra deps)
+sc = SoundCloudYTDLP()   # yt-dlp only (requires pip install nuvem_de_som[yt-dlp])
+
+for t in sc.search_tracks("nuclear chill", limit=5):
+    print(t["title"], t["artist"], t["duration"])
 ```
 
-### `search_sets(query, extract_streams=True)`
+---
 
-Search for playlists/sets.
+## SoundCloudAPI (recommended)
+
+Uses SoundCloud's internal API v2.  Returns full metadata in one call.
+Requires only `requests` — no yt-dlp for search, listing, or stream resolution.
 
 ```python
-for s in SoundCloud.search_sets("chill"):
-    print(s["title"])
-    for t in s["tracks"]:
-        print(" ", t["title"])
+from nuvem_de_som import SoundCloudAPI
+
+sc = SoundCloudAPI()
+
+# Track search
+for t in sc.search_tracks("nuclear chill", limit=5):
+    print(t["title"], t["artist"], t["duration"])
+
+# People search
+for p in sc.search_people("acidkid"):
+    print(p["artist"], p["artist_url"], p["image"])
+
+# Playlist/set search
+for pl in sc.search_sets("chill", limit=5):
+    print(pl["title"], pl["artist"])
+
+# Enumerate all tracks for an artist or set (paginates the full catalogue)
+for t in sc.get_tracks("https://soundcloud.com/acidkid", limit=200):
+    print(t["title"])
+
+for t in sc.get_tracks("https://soundcloud.com/acidkid/sets/beathop"):
+    print(t["title"])
+
+# Resolve a track URL to a direct stream (no yt-dlp required)
+stream_url = sc.resolve_stream("https://soundcloud.com/acidkid/nuclear-chill")
+stream_url = sc.resolve_stream("...", prefer="hls")    # default: "progressive"
+
+# Resolve a profile URL to display name + avatar
+user = sc.resolve_user("https://soundcloud.com/acidkid")
+# {"artist": "Piratech", "artist_url": "...", "image": "..."}
 ```
 
-### `get_tracks(url, extract_streams=False)`
+---
 
-Enumerate tracks on an artist page or set URL.
+## SoundCloudHTML (no-dep fallback)
+
+Parses SoundCloud's public HTML.  No API key.
+
+- **Artist / set pages** (`get_tracks()`): extracts full metadata including
+  artist, artist_url, and duration from schema.org `MusicRecording` markup —
+  no extra requests, no yt-dlp.
+- **Search pages** (`search_tracks()`, `search_people()`, `search_sets()`):
+  SoundCloud's search HTML is sparse — only title + URL are available.
+  Use `search_tracks_enriched()` to add metadata at the cost of one extra
+  request per track.
 
 ```python
-for t in SoundCloud.get_tracks("https://soundcloud.com/piratech"):
+from nuvem_de_som import SoundCloudHTML
+
+sc = SoundCloudHTML()
+
+# Artist page — full metadata from schema.org markup
+for t in sc.get_tracks("https://soundcloud.com/acidkid", limit=20):
+    print(t["title"], t["artist"], t["duration"])  # duration in seconds
+
+# Search — title + URL only (artist/artist_url/image/duration are ""/None)
+for t in sc.search_tracks("nuclear chill", limit=5):
     print(t["title"], t["url"])
+
+# Enriched search — adds artist + image via one extra request per track
+for t in sc.search_tracks_enriched("nuclear chill", limit=5):
+    print(t["title"], t.get("artist"))
+
+# resolve_user scrapes Open Graph / JSON-LD (no API required)
+user = sc.resolve_user("https://soundcloud.com/acidkid")
+
+# resolve_stream raises NotImplementedError — HTML has no stream access
+# Use SoundCloudAPI or SoundCloudYTDLP for stream resolution
 ```
 
-## Track dict format
+---
 
-When `extract_streams=False`:
+## SoundCloudYTDLP (last resort)
+
+All operations backed by yt-dlp.  Best stream resolution resilience; slower.
+No people or set search.  Requires `pip install nuvem_de_som[yt-dlp]`.
+
 ```python
-{"title": str, "url": str}
+from nuvem_de_som import SoundCloudYTDLP
+
+sc = SoundCloudYTDLP()
+
+for t in sc.search_tracks("nuclear chill", limit=5):
+    print(t["title"])
+
+for t in sc.get_tracks("https://soundcloud.com/acidkid"):
+    print(t["title"])
+
+stream = sc.resolve_stream("https://soundcloud.com/acidkid/track-slug")
 ```
 
-When `extract_streams=True` (calls yt-dlp):
+---
+
+## Downloads
+
+Download methods are available **only** on `SoundCloudYTDLP` and `SoundCloud`
+(the orchestrator).  `SoundCloudAPI` and `SoundCloudHTML` do **not** expose
+download methods — calling them would silently lack any implementation.
+
+Downloads require yt-dlp: `pip install nuvem_de_som[yt-dlp]`.
+
+`download_track()` returns `None` on failure (not a placeholder path).
+`download_tracks()` returns only the paths of successfully downloaded files —
+failed downloads are omitted from the list.
+
+`SoundCloud` (orchestrator) delegates all download calls to its internal
+`SoundCloudYTDLP` backend automatically.
+
 ```python
-{"title": str, "artist": str, "image": str, "url": str, "uri": str, "duration": int}
+# Use either SoundCloudYTDLP directly, or the SoundCloud orchestrator
+from nuvem_de_som import SoundCloud, SoundCloudYTDLP
+
+sc = SoundCloud()        # orchestrator — download delegates to yt-dlp backend
+# sc = SoundCloudYTDLP() # yt-dlp backend directly
+
+# Single track → ~/Music/Artist - Title.mp3
+path = sc.download_track(
+    "https://soundcloud.com/acidkid/some-track",
+    output_dir="~/Music",
+    audio_format="mp3",   # or "aac", "flac", etc.
+)
+
+# Multiple tracks — only successful downloads in the return list
+paths = sc.download_tracks(
+    ["https://soundcloud.com/acidkid/track-a",
+     "https://soundcloud.com/acidkid/track-b"],
+    output_dir="~/Music",
+)
+
+# Full artist page or set → ~/Music/Piratech/Title.mp3
+sc.download_playlist("https://soundcloud.com/acidkid", output_dir="~/Music")
+sc.download_playlist("https://soundcloud.com/acidkid/sets/beathop", output_dir="~/Music")
 ```
 
-`uri` is the direct audio stream URL.
+> **Note:** Calling `download_track()` / `download_tracks()` / `download_playlist()`
+> on `SoundCloudAPI` or `SoundCloudHTML` will raise `AttributeError` — those
+> backends do not expose download methods.
 
-## `extract_streams` performance note
+---
 
-Each stream extraction makes an additional network request. For search results, pass `extract_streams=False` to get URLs quickly and call `_extract_streams(url)` lazily only when you need playback.
+## Dict schemas
+
+### Track (all backends)
+
+```python
+{
+    "title":      str,
+    "url":        str,        # SoundCloud permalink
+    "artist":     str,        # display name; "" when not available
+    "artist_url": str,        # profile URL; "" when not available
+    "image":      str,        # artwork URL; "" when not available
+    "duration":   int | None, # seconds; None when not available
+}
+```
+
+> `SoundCloudHTML.search_*` methods return `""` / `None` for artist, artist_url,
+> image, and duration — those fields are absent from SoundCloud's search HTML.
+> `get_tracks()` on an artist/set page provides all fields.
+
+### Artist (`search_people`, `resolve_user`)
+
+```python
+{"artist": str, "artist_url": str, "image": str}
+```
+
+### Playlist (`search_sets`)
+
+```python
+{"title": str, "url": str, "artist": str, "artist_url": str, "image": str}
+```
+
+---
+
+## Stream resolution
+
+`resolve_stream(track_url, prefer="progressive")` resolves a permalink to a
+direct audio URL.
+
+- `prefer="progressive"` — direct MP3/AAC, seekable (default)
+- `prefer="hls"` — HLS playlist (`.m3u8`)
+
+Any value other than `"progressive"` or `"hls"` raises `ValueError`.
+
+```python
+url = sc.resolve_stream("https://soundcloud.com/acidkid/nuclear-chill")
+url = sc.resolve_stream("...", prefer="hls")
+```
+
+## Logging
+
+The library logs debug-level messages via the standard `logging` module under
+the `nuvem_de_som` logger.  Enable with:
+
+```python
+import logging
+logging.getLogger("nuvem_de_som").setLevel(logging.DEBUG)
+```
