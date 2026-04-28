@@ -254,3 +254,75 @@ the `nuvem_de_som` logger.  Enable with:
 import logging
 logging.getLogger("nuvem_de_som").setLevel(logging.DEBUG)
 ```
+
+---
+
+## Terminal app — `nds`
+
+Install the CLI extra to get the `nds` command:
+
+```bash
+pip install "nuvem_de_som[cli]"
+# or with yt-dlp support:
+pip install "nuvem_de_som[yt-dlp,cli]"
+```
+
+### Commands
+
+#### `nds search QUERY`
+
+Search SoundCloud and browse results interactively.  Results are shown as a
+numbered list with artist and duration.  Type a number to select a track, then
+choose `[p]lay`, `[d]ownload`, or `[b]ack`.
+
+```bash
+nds search "nuclear chill"
+nds search "acidkid" --people          # search artists
+nds search "chill" --sets              # search playlists
+nds search "chill" --limit 50
+```
+
+#### `nds browse URL`
+
+Load all tracks from an artist profile or set page and browse interactively.
+
+```bash
+nds browse https://soundcloud.com/acidkid
+nds browse https://soundcloud.com/acidkid/sets/beathop --limit 100
+```
+
+#### `nds play URL`
+
+Resolve a track URL to a direct stream and play it immediately.
+
+```bash
+nds play https://soundcloud.com/acidkid/piratech-nuclear-chill
+```
+
+#### `nds download URL`
+
+Download a single track or a full playlist to disk.
+
+```bash
+nds download https://soundcloud.com/acidkid/piratech-nuclear-chill
+nds download https://soundcloud.com/acidkid/piratech-nuclear-chill -o ~/Music
+nds download https://soundcloud.com/acidkid --playlist -o ~/Music
+```
+
+### Backend selection
+
+All commands accept `--backend` / `-b`:
+
+```bash
+nds --backend api    search "chill"   # SoundCloudAPI  (default)
+nds --backend html   search "chill"   # SoundCloudHTML
+nds --backend ytdlp  search "chill"   # SoundCloudYTDLP
+nds --backend auto   search "chill"   # SoundCloud orchestrator
+```
+
+### Playback
+
+`nds play` and the interactive `[p]lay` action resolve the stream URL and
+launch the first available player found on `$PATH`:
+**mpv** → vlc → ffplay → mplayer.  Install at least one of these to enable
+in-terminal playback.
