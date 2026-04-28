@@ -6,13 +6,20 @@ Browse and play SoundCloud from the terminal::
     nds browse https://soundcloud.com/acidkid
     nds play   https://soundcloud.com/acidkid/piratech-nuclear-chill
     nds download https://soundcloud.com/acidkid/piratech-nuclear-chill
+
+Set NDS_PLAYER to override the audio player, e.g.::
+
+    NDS_PLAYER=mpv nds play ...
+    NDS_PLAYER=/data/data/com.termux/files/usr/bin/mpv nds play ...
+    NDS_PLAYER="C:\\Program Files\\mpv\\mpv.exe" nds play ...
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
-from typing import Iterator, List, Optional
+from typing import List, Optional
 
 import click
 
@@ -29,14 +36,43 @@ BACKENDS = {
     "ytdlp": SoundCloudYTDLP,
 }
 
-_PLAYERS = ["mpv", "vlc", "ffplay", "mplayer"]
+# Candidates tried in order when --player / NDS_PLAYER are not set.
+# Any binary name or absolute path works — shutil.which handles both.
+_DEFAULT_PLAYERS = ["mpv", "vlc", "ffplay", "mplayer", "afplay", "cvlc"]
 
 
-def _player() -> Optional[str]:
-    for p in _PLAYERS:
-        if shutil.which(p):
-            return p
+def _resolve_player(player_hint: Optional[str]) -> Optional[str]:
+    """Return the full path to an audio player binary, or None."""
+    candidates = [player_hint] if player_hint else _DEFAULT_PLAYERS
+    for p in candidates:
+        found = shutil.which(p)
+        if found:
+            return found
     return None
+
+
+def _play_url(player_path: str, stream_url: str) -> None:
+    """Launch *player_path* with *stream_url*.  Unknown players get just the URL."""
+    name = os.path.basename(player_path).lower()
+    # Strip .exe suffix on Windows
+    name = name.removesuffix(".exe") if hasattr(name, "removesuffix") else (
+        name[:-4] if name.endswith(".exe") else name
+    )
+    if name == "mpv":
+        args = [player_path, "--no-video", "--really-quiet", stream_url]
+    elif name in ("vlc", "cvlc"):
+        args = [player_path, "--intf", "dummy", "--play-and-exit", stream_url]
+    elif name == "ffplay":
+        args = [player_path, "-nodisp", "-autoexit", "-loglevel", "quiet", stream_url]
+    elif name == "afplay":
+        # macOS built-in — requires a local file, so this path is best-effort
+        args = [player_path, stream_url]
+    elif name == "mplayer":
+        args = [player_path, "-really-quiet", stream_url]
+    else:
+        # Unknown player: pass the URL as the sole argument and hope for the best
+        args = [player_path, stream_url]
+    subprocess.run(args)
 
 
 def _fmt_duration(seconds: Optional[int]) -> str:
@@ -50,7 +86,6 @@ def _fmt_duration(seconds: Optional[int]) -> str:
 
 
 def _print_tracks(tracks: List[dict], offset: int = 0) -> None:
-    """Print a numbered track list."""
     width = shutil.get_terminal_size().columns
     for i, t in enumerate(tracks, start=offset + 1):
         dur = _fmt_duration(t.get("duration"))
@@ -61,10 +96,7 @@ def _print_tracks(tracks: List[dict], offset: int = 0) -> None:
             label += f"  [{artist}]"
         right = f"  {dur}"
         pad = width - len(label) - len(right)
-        if pad > 0:
-            label += " " * pad + right
-        else:
-            label += right
+        label += (" " * pad + right) if pad > 0 else right
         click.echo(label)
 
 
@@ -75,38 +107,27 @@ def _print_people(people: List[dict], offset: int = 0) -> None:
         click.echo(f"  {i:>3}. {name}  <{url}>")
 
 
-def _resolve_and_play(sc, track_url: str) -> None:
-    player = _player()
-    if not player:
-        click.echo("No audio player found (install mpv, vlc, or ffplay).", err=True)
-        return
-    click.echo(f"Resolving stream …")
+def _resolve_stream(sc, track_url: str) -> Optional[str]:
     try:
-        if isinstance(sc, (SoundCloudHTML,)):
-            # HTML backend can't stream — use API for resolution
-            stream_url = SoundCloudAPI().resolve_stream(track_url)
-        else:
-            stream_url = sc.resolve_stream(track_url)
+        return sc.resolve_stream(track_url)
     except NotImplementedError:
-        stream_url = SoundCloudAPI().resolve_stream(track_url)
+        return SoundCloudAPI().resolve_stream(track_url)
+
+
+def _resolve_and_play(sc, track_url: str, player_hint: Optional[str]) -> None:
+    player_path = _resolve_player(player_hint)
+    if not player_path:
+        hint = f" (tried: {player_hint!r})" if player_hint else ""
+        click.echo(f"No audio player found{hint}. "
+                   "Install mpv/vlc/ffplay or set --player.", err=True)
+        return
+    click.echo("Resolving stream …")
+    stream_url = _resolve_stream(sc, track_url)
     if not stream_url:
         click.echo("Could not resolve a stream URL.", err=True)
         return
-    click.echo(f"Playing via {player} …")
-    _player_cmd(player, stream_url)
-
-
-def _player_cmd(player: str, url: str) -> None:
-    args: List[str]
-    if player == "mpv":
-        args = ["mpv", "--no-video", "--really-quiet", url]
-    elif player == "vlc":
-        args = ["vlc", "--intf", "dummy", "--play-and-exit", url]
-    elif player == "ffplay":
-        args = ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", url]
-    else:
-        args = [player, url]
-    subprocess.run(args)
+    click.echo(f"Playing via {player_path} …")
+    _play_url(player_path, stream_url)
 
 
 # ---------------------------------------------------------------------------
@@ -114,8 +135,7 @@ def _player_cmd(player: str, url: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _interactive_session(sc, tracks: List[dict], people: List[dict],
-                         title: str) -> None:
-    """Show results, let user pick tracks to play/download."""
+                         title: str, player_hint: Optional[str]) -> None:
     if not tracks and not people:
         click.echo("No results.")
         return
@@ -132,8 +152,7 @@ def _interactive_session(sc, tracks: List[dict], people: List[dict],
         click.echo()
         choice = click.prompt(
             "Enter track # to select, 'q' to quit",
-            default="q",
-            show_default=False,
+            default="q", show_default=False,
         ).strip().lower()
 
         if choice in ("q", "quit", "exit", ""):
@@ -155,7 +174,7 @@ def _interactive_session(sc, tracks: List[dict], people: List[dict],
         action = click.prompt("  Action", default="p", show_default=False).strip().lower()
 
         if action in ("p", "play"):
-            _resolve_and_play(sc, track["url"])
+            _resolve_and_play(sc, track["url"], player_hint)
         elif action in ("d", "download"):
             out = click.prompt("  Output dir", default=".", show_default=True)
             try:
@@ -163,7 +182,6 @@ def _interactive_session(sc, tracks: List[dict], people: List[dict],
                 click.echo(f"  Saved: {path}")
             except Exception as exc:
                 click.echo(f"  Download failed: {exc}", err=True)
-        # 'b' or anything else → back to list
 
 
 # ---------------------------------------------------------------------------
@@ -174,11 +192,16 @@ def _interactive_session(sc, tracks: List[dict], people: List[dict],
 @click.option("--backend", "-b",
               type=click.Choice(list(BACKENDS)), default="auto", show_default=True,
               help="Which backend to use.")
+@click.option("--player", "player_hint", default=None, show_default=False,
+              envvar="NDS_PLAYER",
+              help="Audio player binary name or full path (env: NDS_PLAYER). "
+                   "Falls back to auto-detection: mpv, vlc, ffplay, mplayer.")
 @click.pass_context
-def cli(ctx: click.Context, backend: str) -> None:
+def cli(ctx: click.Context, backend: str, player_hint: Optional[str]) -> None:
     """nds — browse and play SoundCloud from the terminal."""
     ctx.ensure_object(dict)
     ctx.obj["sc"] = BACKENDS[backend]()
+    ctx.obj["player"] = player_hint
 
 
 # ---------------------------------------------------------------------------
@@ -196,10 +219,10 @@ def cli(ctx: click.Context, backend: str) -> None:
 def search(ctx: click.Context, query: str, limit: int, mode: str) -> None:
     """Search SoundCloud and browse results interactively."""
     sc = ctx.obj["sc"]
+    player = ctx.obj["player"]
 
     if mode == "people":
-        people = list(sc.search_people(query, limit=limit))
-        _print_people(people)
+        _print_people(list(sc.search_people(query, limit=limit)))
         return
 
     if mode == "sets":
@@ -213,7 +236,7 @@ def search(ctx: click.Context, query: str, limit: int, mode: str) -> None:
 
     click.echo(f"Searching for '{query}' …")
     tracks = list(sc.search_tracks(query, limit=limit))
-    _interactive_session(sc, tracks, [], f"Results for '{query}'")
+    _interactive_session(sc, tracks, [], f"Results for '{query}'", player)
 
 
 # ---------------------------------------------------------------------------
@@ -228,9 +251,10 @@ def search(ctx: click.Context, query: str, limit: int, mode: str) -> None:
 def browse(ctx: click.Context, url: str, limit: int) -> None:
     """Browse an artist or set page interactively."""
     sc = ctx.obj["sc"]
+    player = ctx.obj["player"]
     click.echo(f"Loading {url} …")
     tracks = list(sc.get_tracks(url, limit=limit))
-    _interactive_session(sc, tracks, [], url)
+    _interactive_session(sc, tracks, [], url, player)
 
 
 # ---------------------------------------------------------------------------
@@ -242,8 +266,7 @@ def browse(ctx: click.Context, url: str, limit: int) -> None:
 @click.pass_context
 def play(ctx: click.Context, url: str) -> None:
     """Play a track URL directly."""
-    sc = ctx.obj["sc"]
-    _resolve_and_play(sc, url)
+    _resolve_and_play(ctx.obj["sc"], url, ctx.obj["player"])
 
 
 # ---------------------------------------------------------------------------

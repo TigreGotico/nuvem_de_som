@@ -322,7 +322,19 @@ nds --backend auto   search "chill"   # SoundCloud orchestrator
 
 ### Playback
 
-`nds play` and the interactive `[p]lay` action resolve the stream URL and
-launch the first available player found on `$PATH`:
-**mpv** → vlc → ffplay → mplayer.  Install at least one of these to enable
-in-terminal playback.
+`nds play` and the interactive `[p]lay` action resolve the stream URL and pass
+it to an audio player.  Specify any binary name or full path via `--player` or
+the `NDS_PLAYER` environment variable:
+
+```bash
+nds --player mpv play <url>
+nds --player /data/data/com.termux/files/usr/bin/mpv play <url>   # Termux
+NDS_PLAYER="C:\Program Files\mpv\mpv.exe" nds play <url>          # Windows
+NDS_PLAYER=vlc nds search "chill"
+```
+
+When neither is set, `nds` auto-detects the first available player from:
+**mpv** → vlc → ffplay → mplayer → afplay (macOS) → cvlc.
+
+Any binary that accepts a URL as its sole argument will work even if it is not
+on the known list — `nds` will call `<player> <stream_url>` directly.

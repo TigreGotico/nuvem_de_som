@@ -23,7 +23,8 @@ nds download https://soundcloud.com/acidkid --playlist -o ~/Music
 nds --backend api search "chill"    # force a specific backend (api/html/ytdlp/auto)
 ```
 
-Playback uses the first available player found: **mpv** → vlc → ffplay → mplayer.
+Playback uses `--player` / `NDS_PLAYER` env var, or auto-detects: **mpv** → vlc → ffplay → mplayer → afplay → cvlc.
+Any binary name or full path works — Termux, Windows, macOS all supported.
 
 ## Python API — quick start
 
