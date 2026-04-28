@@ -1,20 +1,12 @@
 # Changelog
 
-## [0.0.2a2](https://github.com/TigreGotico/nuvem_de_som/tree/0.0.2a2) (2026-04-28)
+## [0.1.0a1](https://github.com/TigreGotico/nuvem_de_som/tree/0.1.0a1) (2026-04-28)
 
-[Full Changelog](https://github.com/TigreGotico/nuvem_de_som/compare/0.0.2a1...0.0.2a2)
-
-**Merged pull requests:**
-
-- refactor: clean 3-backend architecture with full metadata, audit fixes, and download support [\#7](https://github.com/TigreGotico/nuvem_de_som/pull/7) ([JarbasAl](https://github.com/JarbasAl))
-
-## [0.0.2a1](https://github.com/TigreGotico/nuvem_de_som/tree/0.0.2a1) (2026-04-27)
-
-[Full Changelog](https://github.com/TigreGotico/nuvem_de_som/compare/0.0.1...0.0.2a1)
+[Full Changelog](https://github.com/TigreGotico/nuvem_de_som/compare/0.0.2...0.1.0a1)
 
 **Merged pull requests:**
 
-- fix: add smoke tests so build-tests CI passes [\#3](https://github.com/TigreGotico/nuvem_de_som/pull/3) ([JarbasAl](https://github.com/JarbasAl))
+- feat: nds terminal client — search, browse, play, download [\#9](https://github.com/TigreGotico/nuvem_de_som/pull/9) ([JarbasAl](https://github.com/JarbasAl))
 
 
 
