@@ -1,13 +1,10 @@
 name: License Check
 
 on:
-  push:
   pull_request:
+    branches: [dev]
   workflow_dispatch:
 
 jobs:
   license_check:
-    uses: OpenVoiceOS/gh-automations/.github/workflows/license_check.yml@dev
-    secrets:
-      PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-      MATRIX_TOKEN: ${{ secrets.MATRIX_TOKEN }}
+    uses: OpenVoiceOS/gh-automations/.github/workflows/license-check.yml@dev
