@@ -573,25 +573,15 @@ class SoundCloudHTML(SoundCloudBase):
                 continue
 
     def resolve_stream(self, track_url: str, prefer: str = "progressive") -> str | None:
-        """Resolve via yt-dlp when installed; returns None otherwise."""
-        if prefer not in _PREFER_VALUES:
-            raise ValueError(f"prefer must be 'progressive' or 'hls'; got {prefer!r}")
-        try:
-            import yt_dlp  # noqa: PLC0415
-            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
-                info = ydl.extract_info(track_url, download=False) or {}
-                formats = info.get("formats") or []
-                if prefer == "progressive":
-                    for f in reversed(formats):
-                        if f.get("protocol") == "https":
-                            return f["url"]
-                return formats[-1]["url"] if formats else info.get("url")
-        except ImportError:
-            log.debug("yt-dlp not installed; HTML resolve_stream returning None")
-            return None
-        except Exception as exc:
-            log.debug("HTML resolve_stream failed for %s: %s", track_url, exc)
-            return None
+        """Not supported by the HTML backend.
+
+        SoundCloud stream URLs are signed and not available in page HTML.
+        Use ``SoundCloudAPI`` or ``SoundCloudYTDLP`` for stream resolution.
+        """
+        raise NotImplementedError(
+            "SoundCloudHTML cannot resolve stream URLs. "
+            "Use SoundCloudAPI (no extra deps) or SoundCloudYTDLP."
+        )
 
     def resolve_user(self, profile_url: str) -> dict | None:
         """Scrape display name and avatar from a profile page via Open Graph / JSON-LD."""

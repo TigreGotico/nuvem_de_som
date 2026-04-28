@@ -123,8 +123,8 @@ for t in sc.search_tracks_enriched("nuclear chill", limit=5):
 # resolve_user scrapes Open Graph / JSON-LD (no API required)
 user = sc.resolve_user("https://soundcloud.com/acidkid")
 
-# resolve_stream uses yt-dlp if installed, otherwise returns None
-stream = sc.resolve_stream("https://soundcloud.com/acidkid/track-slug")
+# resolve_stream raises NotImplementedError — HTML has no stream access
+# Use SoundCloudAPI or SoundCloudYTDLP for stream resolution
 ```
 
 ---

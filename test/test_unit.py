@@ -144,10 +144,10 @@ class TestPreferValidation:
         with pytest.raises(ValueError, match="prefer"):
             sc.resolve_stream("https://soundcloud.com/user/track", prefer="invalid")
 
-    def test_html_invalid_prefer_raises(self):
+    def test_html_resolve_stream_not_implemented(self):
         sc = SoundCloudHTML()
-        with pytest.raises(ValueError, match="prefer"):
-            sc.resolve_stream("https://soundcloud.com/user/track", prefer="bad")
+        with pytest.raises(NotImplementedError):
+            sc.resolve_stream("https://soundcloud.com/user/track")
 
     def test_ytdlp_invalid_prefer_raises(self):
         sc = SoundCloudYTDLP()
