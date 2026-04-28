@@ -48,6 +48,45 @@ class SoundCloud:
             yield info
 
     @staticmethod
+    def search_tracks_api(query, limit=10):
+        """Search tracks via SoundCloud API v2 — returns full metadata in one call.
+
+        Each yielded dict contains ``title``, ``url``, ``artist``, ``artist_url``,
+        ``image``, and ``duration`` (seconds).  No per-track follow-up requests needed.
+        """
+        try:
+            sc = SoundCloud._get_sc_extractor()
+            data = sc._call_api(
+                "https://api-v2.soundcloud.com/search/tracks", None,
+                query={"q": query, "limit": limit},
+            )
+        except Exception:
+            return
+        for t in data.get("collection") or []:
+            yield SoundCloud._parse_api_track(t)
+
+    @staticmethod
+    def search_people_api(query, limit=10):
+        """Search users/artists via SoundCloud API v2 — returns full metadata in one call.
+
+        Each yielded dict contains ``artist``, ``artist_url``, and ``image``.
+        """
+        try:
+            sc = SoundCloud._get_sc_extractor()
+            data = sc._call_api(
+                "https://api-v2.soundcloud.com/search/users", None,
+                query={"q": query, "limit": limit},
+            )
+        except Exception:
+            return
+        for u in data.get("collection") or []:
+            yield {
+                "artist": u.get("username") or "",
+                "artist_url": u.get("permalink_url") or "",
+                "image": u.get("avatar_url") or "",
+            }
+
+    @staticmethod
     def _scrape_track_meta(track_url):
         """Extract artist name and thumbnail from a SoundCloud track page without yt-dlp."""
         import json as _json  # noqa: PLC0415
