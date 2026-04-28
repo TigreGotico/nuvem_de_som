@@ -87,6 +87,54 @@ class SoundCloud:
             }
 
     @staticmethod
+    def resolve_user(profile_url):
+        """Resolve a SoundCloud profile URL to a user info dict.
+
+        Returns a dict with ``artist``, ``artist_url``, and ``image``,
+        or None if the URL cannot be resolved.
+        """
+        try:
+            sc = SoundCloud._get_sc_extractor()
+            u = sc._call_api(
+                "https://api-v2.soundcloud.com/resolve", None,
+                query={"url": profile_url},
+            )
+            if u.get("kind") != "user":
+                return None
+            return {
+                "artist": u.get("username") or "",
+                "artist_url": u.get("permalink_url") or profile_url,
+                "image": u.get("avatar_url") or "",
+            }
+        except Exception:
+            return None
+
+    @staticmethod
+    def search_playlists_api(query, limit=10):
+        """Search playlists/sets via SoundCloud API v2 — returns full metadata in one call.
+
+        Each yielded dict contains ``title``, ``url``, ``artist``, ``artist_url``, and ``image``.
+        """
+        try:
+            sc = SoundCloud._get_sc_extractor()
+            data = sc._call_api(
+                "https://api-v2.soundcloud.com/search/playlists", None,
+                query={"q": query, "limit": limit},
+            )
+        except Exception:
+            return
+        for p in data.get("collection") or []:
+            user = p.get("user") or {}
+            image = p.get("artwork_url") or user.get("avatar_url") or ""
+            yield {
+                "title": p.get("title") or "",
+                "url": p.get("permalink_url") or "",
+                "artist": user.get("username") or "",
+                "artist_url": user.get("permalink_url") or "",
+                "image": image,
+            }
+
+    @staticmethod
     def _scrape_track_meta(track_url):
         """Extract artist name and thumbnail from a SoundCloud track page without yt-dlp."""
         import json as _json  # noqa: PLC0415
