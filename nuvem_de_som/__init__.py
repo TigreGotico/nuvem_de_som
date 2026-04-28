@@ -395,7 +395,10 @@ class SoundCloudAPI(SoundCloudBase):
                                   url=track_url)
             title = resource.get("title") or track_url.rstrip("/").split("/")[-1]
             artist = (resource.get("user") or {}).get("username") or ""
-            fname = f"{artist} - {title}.mp3" if artist else f"{title}.mp3"
+            if artist and not title.lower().startswith(artist.lower()):
+                fname = f"{artist} - {title}.mp3"
+            else:
+                fname = f"{title}.mp3"
         except Exception:
             fname = track_url.rstrip("/").split("/")[-1] + ".mp3"
 
