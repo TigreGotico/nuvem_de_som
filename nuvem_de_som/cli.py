@@ -21,7 +21,10 @@ import subprocess
 import sys
 from typing import List, Optional
 
-import click
+try:
+    import click
+except ImportError:
+    click = None  # type: ignore[assignment]
 
 from nuvem_de_som import SoundCloud, SoundCloudAPI, SoundCloudHTML, SoundCloudYTDLP
 
@@ -179,7 +182,10 @@ def _interactive_session(sc, tracks: List[dict], people: List[dict],
             out = click.prompt("  Output dir", default=".", show_default=True)
             try:
                 path = sc.download_track(track["url"], output_dir=out)
-                click.echo(f"  Saved: {path}")
+                if path:
+                    click.echo(f"  Saved: {path}")
+                else:
+                    click.echo(f"  Failed to save: {track['url']}", err=True)
             except Exception as exc:
                 click.echo(f"  Download failed: {exc}", err=True)
 
@@ -285,7 +291,11 @@ def download(ctx: click.Context, url: str, output_dir: str, playlist: bool) -> N
     sc = ctx.obj["sc"]
     if playlist:
         click.echo(f"Downloading playlist {url} → {output_dir}")
-        sc.download_playlist(url, output_dir=output_dir)
+        try:
+            sc.download_playlist(url, output_dir=output_dir)
+        except Exception as exc:
+            click.echo(f"Playlist download failed: {exc}", err=True)
+            sys.exit(1)
     else:
         click.echo(f"Downloading {url} → {output_dir}")
         path = sc.download_track(url, output_dir=output_dir)
@@ -297,6 +307,9 @@ def download(ctx: click.Context, url: str, output_dir: str, playlist: bool) -> N
 
 
 def main() -> None:
+    if click is None:
+        print("nds requires click: pip install \"nuvem_de_som[cli]\"", file=sys.stderr)
+        sys.exit(1)
     cli(obj={})
 
 
