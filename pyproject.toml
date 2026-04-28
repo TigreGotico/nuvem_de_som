@@ -22,3 +22,8 @@ version = { attr = "nuvem_de_som.version.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["nuvem_de_som*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that hit live network endpoints (deselect with -m 'not integration')",
+]

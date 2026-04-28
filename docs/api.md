@@ -24,7 +24,7 @@ for track in SoundCloud.search("heavy metal", extract_streams=False):
 Search by track name.
 
 ```python
-for track in SoundCloud.search_tracks("piratech nuclear chill"):
+for track in SoundCloud.search_tracks("acidkid"):
     print(track)
 ```
 
@@ -36,7 +36,7 @@ Search by artist/user name. Each result is a dict with:
 - `tracks` — list of track dicts for that artist
 
 ```python
-for person in SoundCloud.search_people("piratech"):
+for person in SoundCloud.search_people("acidkid"):
     print(person["artist"])
     for t in person["tracks"]:
         print(" ", t["title"])
@@ -55,26 +55,54 @@ for s in SoundCloud.search_sets("chill"):
 
 ### `get_tracks(url, extract_streams=False)`
 
-Enumerate tracks on an artist page or set URL.
+Enumerate tracks on an artist page or set URL by scraping the HTML.
 
 ```python
-for t in SoundCloud.get_tracks("https://soundcloud.com/piratech"):
+for t in SoundCloud.get_tracks("https://soundcloud.com/acidkid"):
     print(t["title"], t["url"])
+```
+
+**Limitation:** SoundCloud renders its pages with JavaScript. The initial HTML only contains ~20 items; `get_tracks()` cannot paginate beyond that. Use `get_tracks_full()` when you need the complete catalogue.
+
+### `get_tracks_full(url, limit=200)`
+
+Enumerate **all** tracks on an artist page or set URL using yt-dlp flat extraction.
+
+Unlike `get_tracks()`, this method goes through SoundCloud's internal API (via yt-dlp) and paginates until `limit` items have been collected or the catalogue is exhausted. Each yielded dict always contains `title`, `url`, `artist`, `image`, and `duration` keys.
+
+```python
+for t in SoundCloud.get_tracks_full("https://soundcloud.com/acidkid"):
+    print(t["title"], t["url"])
+
+# Cap at 50 tracks
+tracks = list(SoundCloud.get_tracks_full("https://soundcloud.com/acidkid", limit=50))
+```
+
+Works for both artist profile URLs and set (playlist) URLs:
+
+```python
+for t in SoundCloud.get_tracks_full("https://soundcloud.com/acidkid/sets/acid"):
+    print(t["title"])
 ```
 
 ## Track dict format
 
-When `extract_streams=False`:
+`get_tracks()` with `extract_streams=False`:
 ```python
 {"title": str, "url": str}
 ```
 
-When `extract_streams=True` (calls yt-dlp):
+`get_tracks()` with `extract_streams=True` (calls yt-dlp):
 ```python
 {"title": str, "artist": str, "image": str, "url": str, "uri": str, "duration": int}
 ```
 
-`uri` is the direct audio stream URL.
+`get_tracks_full()` (always):
+```python
+{"title": str, "url": str, "artist": str, "image": str, "duration": int | None, "artist_url": str | None}
+```
+
+`uri` (direct audio stream URL) is only present in `extract_streams=True` results; it is **not** in `get_tracks_full()` output — obtain it lazily via `_extract_streams(url)` at playback time.
 
 ## `extract_streams` performance note
 
