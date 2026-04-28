@@ -150,17 +150,27 @@ stream = sc.resolve_stream("https://soundcloud.com/acidkid/track-slug")
 
 ---
 
-## Downloads (all backends)
+## Downloads
 
-Download methods are defined on `SoundCloudBase` and inherited by all backends.
-They require yt-dlp: `pip install nuvem_de_som[streams]`.
+Download methods are available **only** on `SoundCloudYTDLP` and `SoundCloud`
+(the orchestrator).  `SoundCloudAPI` and `SoundCloudHTML` do **not** expose
+download methods — calling them would silently lack any implementation.
+
+Downloads require yt-dlp: `pip install nuvem_de_som[streams]`.
 
 `download_track()` returns `None` on failure (not a placeholder path).
 `download_tracks()` returns only the paths of successfully downloaded files —
 failed downloads are omitted from the list.
 
+`SoundCloud` (orchestrator) delegates all download calls to its internal
+`SoundCloudYTDLP` backend automatically.
+
 ```python
-sc = SoundCloud()
+# Use either SoundCloudYTDLP directly, or the SoundCloud orchestrator
+from nuvem_de_som import SoundCloud, SoundCloudYTDLP
+
+sc = SoundCloud()        # orchestrator — download delegates to yt-dlp backend
+# sc = SoundCloudYTDLP() # yt-dlp backend directly
 
 # Single track → ~/Music/Artist - Title.mp3
 path = sc.download_track(
@@ -180,6 +190,10 @@ paths = sc.download_tracks(
 sc.download_playlist("https://soundcloud.com/acidkid", output_dir="~/Music")
 sc.download_playlist("https://soundcloud.com/acidkid/sets/beathop", output_dir="~/Music")
 ```
+
+> **Note:** Calling `download_track()` / `download_tracks()` / `download_playlist()`
+> on `SoundCloudAPI` or `SoundCloudHTML` will raise `AttributeError` — those
+> backends do not expose download methods.
 
 ---
 

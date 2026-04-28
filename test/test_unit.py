@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -181,7 +181,6 @@ class TestClientIdThreadSafety:
     def test_concurrent_calls_dont_duplicate_fetch(self):
         _invalidate_client_id()
         fetch_count = {"n": 0}
-        original_fetch = __import__("nuvem_de_som")._fetch_client_id
 
         def counting_fetch():
             fetch_count["n"] += 1
@@ -291,12 +290,13 @@ class TestOrchestratorFallback:
 
 
 # ---------------------------------------------------------------------------
-# download_tracks — omits failures
+# download_tracks — omits failures (only available on SoundCloudYTDLP / SoundCloud)
 # ---------------------------------------------------------------------------
 
 class TestDownloadTracks:
     def test_failed_download_omitted(self):
-        sc = SoundCloudAPI()
+        """download_tracks() skips None returns — only on SoundCloudYTDLP."""
+        sc = SoundCloudYTDLP()
         urls = ["https://soundcloud.com/user/a", "https://soundcloud.com/user/b"]
         returns = [None, Path("/tmp/b.mp3")]
 
@@ -305,3 +305,32 @@ class TestDownloadTracks:
 
         assert results == [Path("/tmp/b.mp3")]
         assert len(results) == 1
+
+    def test_orchestrator_delegates_to_ytdlp(self):
+        """SoundCloud.download_track() delegates to the SoundCloudYTDLP backend."""
+        sc = SoundCloud()
+        ytdlp_backend = sc._ytdlp
+        expected = Path("/tmp/track.mp3")
+
+        with patch.object(ytdlp_backend, "download_track", return_value=expected) as m:
+            result = sc.download_track("https://soundcloud.com/user/track")
+
+        assert result == expected
+        m.assert_called_once_with(
+            "https://soundcloud.com/user/track",
+            output_dir=".", audio_format="mp3", verbose=False,
+        )
+
+    def test_api_backend_has_no_download_methods(self):
+        """SoundCloudAPI should not have download methods."""
+        sc = SoundCloudAPI()
+        assert not hasattr(sc, "download_track"), (
+            "SoundCloudAPI should not expose download_track"
+        )
+
+    def test_html_backend_has_no_download_methods(self):
+        """SoundCloudHTML should not have download methods."""
+        sc = SoundCloudHTML()
+        assert not hasattr(sc, "download_track"), (
+            "SoundCloudHTML should not expose download_track"
+        )
