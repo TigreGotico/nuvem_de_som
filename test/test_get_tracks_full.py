@@ -17,7 +17,7 @@ from nuvem_de_som import SoundCloud
 ARTIST_URL = "https://soundcloud.com/acidkid"
 # acidkid is the URL slug; the real display name returned by the API is "Piratech"
 ARTIST_DISPLAY_NAME = "Piratech"
-SET_URL = "https://soundcloud.com/acidkid/sets/acid"
+SET_URL = "https://soundcloud.com/acidkid/sets/beathop"
 
 
 def _assert_track(track: dict) -> None:

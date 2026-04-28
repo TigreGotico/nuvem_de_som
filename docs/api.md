@@ -81,7 +81,7 @@ tracks = list(SoundCloud.get_tracks_full("https://soundcloud.com/acidkid", limit
 Works for both artist profile URLs and set (playlist) URLs:
 
 ```python
-for t in SoundCloud.get_tracks_full("https://soundcloud.com/acidkid/sets/acid"):
+for t in SoundCloud.get_tracks_full("https://soundcloud.com/acidkid/sets/beathop"):
     print(t["title"])
 ```
 
