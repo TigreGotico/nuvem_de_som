@@ -290,7 +290,6 @@ class SoundCloudAPI(SoundCloudBase):
 
     def _call(self, endpoint: str, **params) -> dict:
         """Call an API v2 endpoint; refresh client_id automatically on 401/403."""
-        resp = None
         for attempt in range(2):
             cid = _get_client_id()
             resp = requests.get(
@@ -305,9 +304,8 @@ class SoundCloudAPI(SoundCloudBase):
                 continue
             resp.raise_for_status()
             return resp.json()
-        # second attempt also failed — raise from last response
-        resp.raise_for_status()  # type: ignore[union-attr]
-        return {}
+        # unreachable: the loop always returns or raises above
+        raise RuntimeError("unexpected exit from _call retry loop")
 
     @staticmethod
     def _parse_track(t: dict, artist_url: str | None = None) -> dict:
@@ -380,9 +378,13 @@ class SoundCloudAPI(SoundCloudBase):
                 if collected >= limit:
                     return
                 if not t.get("title"):
+                    log.debug("get_tracks: skipping untitled track in playlist %s", url)
                     continue
                 yield self._parse_track(t, artist_url=artist_url)
                 collected += 1
+
+        else:
+            log.debug("get_tracks: unexpected resource kind %r for %s", kind, url)
 
     def resolve_stream(self, track_url: str, prefer: str = "progressive") -> str | None:
         """Resolve track URL to a direct audio stream via transcodings — no yt-dlp.
@@ -727,10 +729,11 @@ class SoundCloudYTDLP(SoundCloudBase):
             with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
                 info = ydl.extract_info(track_url, download=False) or {}
                 formats = info.get("formats") or []
-                if prefer == "progressive":
-                    for f in reversed(formats):
-                        if f.get("protocol") == "https":
-                            return f["url"]
+                target_protocol = "https" if prefer == "progressive" else "m3u8_native"
+                for f in reversed(formats):
+                    if f.get("protocol") == target_protocol:
+                        return f["url"]
+                # fall back to any format if preferred protocol not found
                 return formats[-1]["url"] if formats else info.get("url")
         except ImportError:
             raise
