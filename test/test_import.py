@@ -1,6 +1,6 @@
 def test_import():
-    import nuvem_de_som
-    from nuvem_de_som import SoundCloud
+    import nuvem_de_som  # noqa: F401
+    from nuvem_de_som import SoundCloud  # noqa: F401
 
 
 def test_version():
