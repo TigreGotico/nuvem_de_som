@@ -1,12 +1,20 @@
 # Changelog
 
-## [0.0.2a1](https://github.com/JarbasAl/nuvem_de_som/tree/0.0.2a1) (2026-04-27)
+## [0.0.2a2](https://github.com/TigreGotico/nuvem_de_som/tree/0.0.2a2) (2026-04-28)
 
-[Full Changelog](https://github.com/JarbasAl/nuvem_de_som/compare/0.0.1...0.0.2a1)
+[Full Changelog](https://github.com/TigreGotico/nuvem_de_som/compare/0.0.2a1...0.0.2a2)
 
 **Merged pull requests:**
 
-- modernize: pyproject.toml, yt-dlp, bug fixes, docs, CI [\#1](https://github.com/JarbasAl/nuvem_de_som/pull/1) ([JarbasAl](https://github.com/JarbasAl))
+- refactor: clean 3-backend architecture with full metadata, audit fixes, and download support [\#7](https://github.com/TigreGotico/nuvem_de_som/pull/7) ([JarbasAl](https://github.com/JarbasAl))
+
+## [0.0.2a1](https://github.com/TigreGotico/nuvem_de_som/tree/0.0.2a1) (2026-04-27)
+
+[Full Changelog](https://github.com/TigreGotico/nuvem_de_som/compare/0.0.1...0.0.2a1)
+
+**Merged pull requests:**
+
+- fix: add smoke tests so build-tests CI passes [\#3](https://github.com/TigreGotico/nuvem_de_som/pull/3) ([JarbasAl](https://github.com/JarbasAl))
 
 
 
