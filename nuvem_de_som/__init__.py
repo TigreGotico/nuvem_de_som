@@ -6,6 +6,33 @@ from bs4 import BeautifulSoup
 class SoundCloud:
     @staticmethod
     def search(query, extract_streams=True):
+        """Combined search yielding tracks from people, sets, and direct track search.
+
+        Uses the API v2 methods (full metadata, no per-track follow-up requests)
+        with a fallback to the original HTML scrapers if the API is unavailable.
+        ``extract_streams`` is honoured only when falling back to the HTML path.
+        """
+        try:
+            sc = SoundCloud._get_sc_extractor()
+        except Exception:
+            sc = None
+
+        if sc is not None:
+            # API path — full metadata, no extra requests
+            try:
+                for item in SoundCloud.search_people_api(query, limit=3):
+                    for t in SoundCloud.get_tracks_full(item["artist_url"], limit=5):
+                        yield t
+                for item in SoundCloud.search_playlists_api(query, limit=3):
+                    for t in SoundCloud.get_tracks_full(item["url"], limit=5):
+                        yield t
+                for t in SoundCloud.search_tracks_api(query, limit=10):
+                    yield t
+                return
+            except Exception:
+                pass  # fall through to HTML scrapers
+
+        # HTML scraper fallback
         for item in SoundCloud.search_people(query, extract_streams):
             for t in item["tracks"]:
                 yield t
