@@ -7,7 +7,7 @@ Three independent concrete backends, one orchestrator:
 - ``SoundCloudHTML``   — HTML page scraper.  No API key, ~20 results per page.
                          No extra deps.
 - ``SoundCloudYTDLP``  — yt-dlp backed.  Best stream resolution; slower search.
-                         Requires ``pip install nuvem_de_som[streams]``.
+                         Requires ``pip install nuvem_de_som[yt-dlp]``.
                          Download methods (``download_track``, ``download_tracks``,
                          ``download_playlist``) are only available on this backend
                          and on the ``SoundCloud`` orchestrator.
@@ -28,9 +28,10 @@ Quick start::
     for t in sc.search_tracks("nuclear chill", limit=5):
         print(t["title"], t["artist"])
 
-    # Downloads require yt-dlp (pip install nuvem_de_som[streams])
-    # Only available on SoundCloudYTDLP and SoundCloud (orchestrator)
-    sc = SoundCloud()  # or SoundCloudYTDLP()
+    # SoundCloudAPI.download_* uses only requests (no yt-dlp).
+    # SoundCloudYTDLP.download_* uses yt-dlp (pip install nuvem_de_som[yt-dlp]).
+    # SoundCloud orchestrator tries API first, falls back to yt-dlp.
+    sc = SoundCloudAPI()
     sc.download_track("https://soundcloud.com/user/track", output_dir="~/Music")
     sc.download_playlist("https://soundcloud.com/user", output_dir="~/Music")
 
@@ -122,7 +123,7 @@ def _ydl_import():
     except ImportError as e:
         raise ImportError(
             "yt-dlp is required for downloads; "
-            "install with: pip install nuvem_de_som[streams]"
+            "install with: pip install nuvem_de_som[yt-dlp]"
         ) from e
 
 
@@ -356,6 +357,95 @@ class SoundCloudAPI(SoundCloudBase):
         except Exception as exc:
             log.debug("resolve_user failed for %s: %s", profile_url, exc)
             return None
+
+    # -- download (pure requests, no yt-dlp) ---------------------------------
+
+    @staticmethod
+    def _safe_filename(s: str) -> str:
+        """Strip characters that are illegal in filenames on common OSes."""
+        return re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", s).strip()
+
+    def download_track(self, track_url: str, output_dir: str = ".",
+                       verbose: bool = False) -> Path:
+        """Download a single track via the API — no yt-dlp required.
+
+        Resolves the progressive (direct MP3/AAC) stream URL and streams the
+        response to disk.  The filename is derived from the track's real title
+        and artist name fetched from the API.
+
+        Parameters
+        ----------
+        track_url:
+            SoundCloud track permalink.
+        output_dir:
+            Destination directory (created if absent).
+        verbose:
+            Log progress to debug.
+
+        Returns the path of the saved file.
+        Raises ``RuntimeError`` if the stream URL cannot be resolved.
+        """
+        stream_url = self.resolve_stream(track_url, prefer="progressive")
+        if not stream_url:
+            raise RuntimeError(f"Could not resolve stream for {track_url}")
+
+        # Fetch metadata for a proper filename
+        try:
+            resource = self._call("https://api-v2.soundcloud.com/resolve",
+                                  url=track_url)
+            title = resource.get("title") or track_url.rstrip("/").split("/")[-1]
+            artist = (resource.get("user") or {}).get("username") or ""
+            fname = f"{artist} - {title}.mp3" if artist else f"{title}.mp3"
+        except Exception:
+            fname = track_url.rstrip("/").split("/")[-1] + ".mp3"
+
+        fname = self._safe_filename(fname)
+        out = Path(output_dir).expanduser()
+        out.mkdir(parents=True, exist_ok=True)
+        dest = out / fname
+
+        log.debug("Downloading %s → %s", track_url, dest)
+        with requests.get(stream_url, stream=True, timeout=60,
+                          headers=_SC_HEADERS) as r:
+            r.raise_for_status()
+            with open(dest, "wb") as f:
+                for chunk in r.iter_content(chunk_size=65536):
+                    f.write(chunk)
+
+        return dest
+
+    def download_tracks(self, track_urls, output_dir: str = ".",
+                        verbose: bool = False) -> list[Path]:
+        """Download multiple tracks via the API.
+
+        Returns a list of successfully downloaded file paths; failures are
+        logged and omitted.
+        """
+        results = []
+        for url in track_urls:
+            try:
+                results.append(self.download_track(url, output_dir=output_dir,
+                                                   verbose=verbose))
+            except Exception as exc:
+                log.debug("download_track failed for %s: %s", url, exc)
+        return results
+
+    def download_playlist(self, playlist_url: str, output_dir: str = ".",
+                          verbose: bool = False) -> list[Path]:
+        """Download every track in an artist page or set URL via the API.
+
+        Tracks are saved into a sub-folder named after the artist inside
+        *output_dir*.
+        """
+        tracks = list(self.get_tracks(playlist_url))
+        if not tracks:
+            return []
+        # Use artist name from first track for the sub-folder
+        artist = tracks[0].get("artist") or "SoundCloud"
+        dest_dir = Path(output_dir).expanduser() / self._safe_filename(artist)
+        return self.download_tracks(
+            (t["url"] for t in tracks), output_dir=str(dest_dir), verbose=verbose
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -600,7 +690,7 @@ class SoundCloudYTDLP(SoundCloudBase):
     ``search_people()`` and ``search_sets()`` yield nothing — yt-dlp does not
     expose those endpoints.
 
-    Requires ``pip install nuvem_de_som[streams]``.
+    Requires ``pip install nuvem_de_som[yt-dlp]``.
     """
 
     @staticmethod
@@ -691,7 +781,7 @@ class SoundCloudYTDLP(SoundCloudBase):
 
     # -- download ------------------------------------------------------------
 
-    def _download_urls(self, urls: list[str], output_dir: str, audio_format: str,
+    def _download_urls(self, urls: list[str], output_dir: str,
                        verbose: bool, outtmpl_suffix: str) -> list[Path]:
         yt_dlp = _ydl_import()
         out = Path(output_dir)
@@ -708,55 +798,37 @@ class SoundCloudYTDLP(SoundCloudBase):
             "quiet": not verbose,
             "outtmpl": outtmpl,
             "progress_hooks": [_Hook()],
-            "postprocessors": [{"key": "FFmpegExtractAudio",
-                                "preferredcodec": audio_format}],
         }
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download(urls)
         return downloaded
 
     def download_track(self, track_url: str, output_dir: str = ".",
-                       audio_format: str = "mp3", verbose: bool = False) -> Path | None:
-        """Download a single track via yt-dlp.
-
-        Parameters
-        ----------
-        track_url:
-            SoundCloud track permalink.
-        output_dir:
-            Destination directory.
-        audio_format:
-            Codec for ``--audio-format`` (e.g. ``"mp3"``, ``"aac"``).
-        verbose:
-            Show yt-dlp output.
+                       verbose: bool = False) -> Path | None:
+        """Download a single track via yt-dlp in its native format.
 
         Returns the path of the downloaded file, or ``None`` on failure.
         """
         files = self._download_urls(
-            [track_url], output_dir, audio_format, verbose,
+            [track_url], output_dir, verbose,
             outtmpl_suffix="%(uploader)s - %(title)s.%(ext)s",
         )
         return files[0] if files else None
 
     def download_tracks(self, track_urls, output_dir: str = ".",
-                        audio_format: str = "mp3",
                         verbose: bool = False) -> list[Path]:
-        """Download multiple tracks.
+        """Download multiple tracks via yt-dlp.
 
-        *track_urls* may be any iterable of SoundCloud permalink strings.
-        Returns a list of successfully downloaded file paths (failed downloads
-        are omitted rather than returning a placeholder path).
+        Returns only paths of successfully downloaded files.
         """
         results = []
         for u in track_urls:
-            path = self.download_track(u, output_dir=output_dir,
-                                       audio_format=audio_format, verbose=verbose)
+            path = self.download_track(u, output_dir=output_dir, verbose=verbose)
             if path is not None:
                 results.append(path)
         return results
 
     def download_playlist(self, playlist_url: str, output_dir: str = ".",
-                          audio_format: str = "mp3",
                           verbose: bool = False) -> list[Path]:
         """Download every track in an artist page or set URL via yt-dlp.
 
@@ -764,7 +836,7 @@ class SoundCloudYTDLP(SoundCloudBase):
         *output_dir*.
         """
         return self._download_urls(
-            [playlist_url], output_dir, audio_format, verbose,
+            [playlist_url], output_dir, verbose,
             outtmpl_suffix="%(uploader)s/%(title)s.%(ext)s",
         )
 
@@ -836,7 +908,14 @@ class SoundCloud(SoundCloudBase):
     def resolve_user(self, profile_url: str) -> dict | None:
         return self._try_each_value("resolve_user", profile_url)
 
-    # -- downloads (delegated to yt-dlp backend) -----------------------------
+    # -- downloads (API first, yt-dlp fallback) ------------------------------
+
+    @property
+    def _api(self) -> SoundCloudAPI:
+        for b in self._chain:
+            if isinstance(b, SoundCloudAPI):
+                return b
+        raise RuntimeError("SoundCloudAPI backend not found in chain")
 
     @property
     def _ytdlp(self) -> SoundCloudYTDLP:
@@ -846,34 +925,42 @@ class SoundCloud(SoundCloudBase):
         raise RuntimeError("SoundCloudYTDLP backend not found in chain")
 
     def download_track(self, track_url: str, output_dir: str = ".",
-                       audio_format: str = "mp3", verbose: bool = False) -> Path | None:
-        """Download a single track via yt-dlp.
+                       verbose: bool = False) -> Path | None:
+        """Download a single track.
 
-        Delegates to the ``SoundCloudYTDLP`` backend.
-        Requires ``pip install nuvem_de_som[streams]``.
+        Tries the API backend first (pure requests, no extra deps).  Falls back
+        to ``SoundCloudYTDLP`` if the API stream fails — yt-dlp must be
+        installed for the fallback (``pip install nuvem_de_som[yt-dlp]``).
         """
+        try:
+            return self._api.download_track(track_url, output_dir=output_dir,
+                                            verbose=verbose)
+        except Exception as exc:
+            log.debug("API download failed for %s (%s), trying yt-dlp", track_url, exc)
         return self._ytdlp.download_track(track_url, output_dir=output_dir,
-                                          audio_format=audio_format, verbose=verbose)
+                                          verbose=verbose)
 
     def download_tracks(self, track_urls, output_dir: str = ".",
-                        audio_format: str = "mp3",
                         verbose: bool = False) -> list[Path]:
-        """Download multiple tracks via yt-dlp.
-
-        Delegates to the ``SoundCloudYTDLP`` backend.
-        Returns only paths of successfully downloaded files.
-        """
-        return self._ytdlp.download_tracks(track_urls, output_dir=output_dir,
-                                           audio_format=audio_format, verbose=verbose)
+        """Download multiple tracks (API first, yt-dlp fallback per track)."""
+        results = []
+        for url in track_urls:
+            path = self.download_track(url, output_dir=output_dir, verbose=verbose)
+            if path is not None:
+                results.append(path)
+        return results
 
     def download_playlist(self, playlist_url: str, output_dir: str = ".",
-                          audio_format: str = "mp3",
                           verbose: bool = False) -> list[Path]:
-        """Download every track in an artist page or set URL via yt-dlp.
+        """Download every track in an artist page or set URL.
 
-        Delegates to the ``SoundCloudYTDLP`` backend.
-        A sub-folder named after the artist is created automatically inside
-        *output_dir*.
+        Tries the API backend first (no yt-dlp required).  Falls back to
+        yt-dlp if the API stream fails.
         """
+        try:
+            return self._api.download_playlist(playlist_url, output_dir=output_dir,
+                                               verbose=verbose)
+        except Exception as exc:
+            log.debug("API download_playlist failed (%s), trying yt-dlp", exc)
         return self._ytdlp.download_playlist(playlist_url, output_dir=output_dir,
-                                             audio_format=audio_format, verbose=verbose)
+                                             verbose=verbose)

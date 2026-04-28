@@ -43,7 +43,7 @@ from nuvem_de_som import SoundCloud, SoundCloudAPI, SoundCloudHTML, SoundCloudYT
 sc = SoundCloud()        # orchestrator: API → yt-dlp → HTML fallback
 sc = SoundCloudAPI()     # API only (full metadata, recommended)
 sc = SoundCloudHTML()    # HTML scraper only (no extra deps)
-sc = SoundCloudYTDLP()   # yt-dlp only (requires pip install nuvem_de_som[streams])
+sc = SoundCloudYTDLP()   # yt-dlp only (requires pip install nuvem_de_som[yt-dlp])
 
 for t in sc.search_tracks("nuclear chill", limit=5):
     print(t["title"], t["artist"], t["duration"])
@@ -132,7 +132,7 @@ user = sc.resolve_user("https://soundcloud.com/acidkid")
 ## SoundCloudYTDLP (last resort)
 
 All operations backed by yt-dlp.  Best stream resolution resilience; slower.
-No people or set search.  Requires `pip install nuvem_de_som[streams]`.
+No people or set search.  Requires `pip install nuvem_de_som[yt-dlp]`.
 
 ```python
 from nuvem_de_som import SoundCloudYTDLP
@@ -156,7 +156,7 @@ Download methods are available **only** on `SoundCloudYTDLP` and `SoundCloud`
 (the orchestrator).  `SoundCloudAPI` and `SoundCloudHTML` do **not** expose
 download methods — calling them would silently lack any implementation.
 
-Downloads require yt-dlp: `pip install nuvem_de_som[streams]`.
+Downloads require yt-dlp: `pip install nuvem_de_som[yt-dlp]`.
 
 `download_track()` returns `None` on failure (not a placeholder path).
 `download_tracks()` returns only the paths of successfully downloaded files —

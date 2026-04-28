@@ -318,15 +318,15 @@ class TestDownloadTracks:
         assert result == expected
         m.assert_called_once_with(
             "https://soundcloud.com/user/track",
-            output_dir=".", audio_format="mp3", verbose=False,
+            output_dir=".", verbose=False,
         )
 
-    def test_api_backend_has_no_download_methods(self):
-        """SoundCloudAPI should not have download methods."""
+    def test_api_backend_has_download_methods(self):
+        """SoundCloudAPI exposes download_track/tracks/playlist (pure requests, no yt-dlp)."""
         sc = SoundCloudAPI()
-        assert not hasattr(sc, "download_track"), (
-            "SoundCloudAPI should not expose download_track"
-        )
+        assert hasattr(sc, "download_track")
+        assert hasattr(sc, "download_tracks")
+        assert hasattr(sc, "download_playlist")
 
     def test_html_backend_has_no_download_methods(self):
         """SoundCloudHTML should not have download methods."""

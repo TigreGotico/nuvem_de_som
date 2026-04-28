@@ -12,7 +12,7 @@ requires-python = ">=3.8"
 dependencies = ["bs4", "requests"]
 
 [project.optional-dependencies]
-streams = ["yt-dlp"]
+yt-dlp = ["yt-dlp"]
 test = ["pytest"]
 
 [project.urls]
