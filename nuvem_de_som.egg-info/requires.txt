@@ -1,6 +1,0 @@
-bs4
-yt-dlp
-requests
-
-[test]
-pytest
