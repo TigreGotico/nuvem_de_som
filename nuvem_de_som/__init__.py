@@ -139,33 +139,84 @@ class SoundCloud:
                 continue
 
     @staticmethod
-    def get_tracks_full(url, limit=200):
-        """Return all tracks for a profile or set URL using yt-dlp flat extraction.
+    def _get_sc_extractor():
+        """Return an initialized yt-dlp SoundCloud extractor with a valid client_id."""
+        ydl = yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True})
+        sc = ydl.get_info_extractor("Soundcloud")
+        sc.set_downloader(ydl)
+        sc._update_client_id()
+        return sc
 
-        Unlike get_tracks(), this uses SoundCloud's API via yt-dlp and paginates
-        through the full catalogue rather than being limited to the first HTML page.
-        """
-        ydl_opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "extract_flat": True,
-            "skip_download": True,
-            "playlistend": limit,
+    @staticmethod
+    def _parse_api_track(t, artist_url=None):
+        """Convert a SoundCloud API v2 track dict to the nuvem_de_som track format."""
+        user = t.get("user") or {}
+        # artwork_url falls back to the user's avatar when the track has no cover
+        image = t.get("artwork_url") or user.get("avatar_url") or ""
+        # API returns duration in milliseconds
+        duration = (t["duration"] // 1000) if t.get("duration") else None
+        return {
+            "title": t.get("title") or "",
+            "url": t.get("permalink_url") or "",
+            "artist": user.get("username") or "",
+            "artist_url": artist_url or user.get("permalink_url") or "",
+            "image": image,
+            "duration": duration,
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False) or {}
-        for entry in info.get("entries") or []:
-            track_url = entry.get("url") or entry.get("webpage_url") or ""
-            if not track_url:
-                continue
-            yield {
-                "title": entry.get("title") or track_url,
-                "url": track_url,
-                "artist": entry.get("uploader") or entry.get("channel") or "",
-                "image": entry.get("thumbnail") or "",
-                "duration": entry.get("duration"),
-                "artist_url": url if "/sets/" not in url else None,
-            }
+
+    @staticmethod
+    def get_tracks_full(url, limit=200):
+        """Return all tracks for a profile or set URL with full metadata.
+
+        Uses SoundCloud's API v2 (client_id auto-managed by yt-dlp, refreshed
+        on 401/403) to paginate through the complete catalogue. Each yielded
+        dict always contains: ``title``, ``url``, ``artist``, ``artist_url``,
+        ``image``, ``duration``.
+
+        Unlike get_tracks(), which scrapes HTML and is capped at ~20 items,
+        this method returns the real artist display name (e.g. "Piratech"
+        rather than the URL slug "acidkid"), per-track artwork, and duration
+        for every track.
+        """
+        try:
+            sc = SoundCloud._get_sc_extractor()
+            resource = sc._call_api(
+                "https://api-v2.soundcloud.com/resolve", None,
+                query={"url": url},
+            )
+        except Exception:
+            return
+
+        kind = resource.get("kind")
+        collected = 0
+
+        if kind == "user":
+            user_id = resource["id"]
+            artist_url = resource.get("permalink_url") or url
+            next_href = f"https://api-v2.soundcloud.com/users/{user_id}/tracks"
+            while next_href and collected < limit:
+                try:
+                    data = sc._call_api(next_href, None,
+                                        query={"limit": 50, "linked_partitioning": 1})
+                except Exception:
+                    break
+                for t in data.get("collection") or []:
+                    if collected >= limit:
+                        break
+                    yield SoundCloud._parse_api_track(t, artist_url=artist_url)
+                    collected += 1
+                next_href = data.get("next_href")
+
+        elif kind == "playlist":
+            artist_url = (resource.get("user") or {}).get("permalink_url") or ""
+            for t in resource.get("tracks") or []:
+                if collected >= limit:
+                    break
+                # Playlist tracks may be stubs (only id/kind) — skip those
+                if not t.get("title"):
+                    continue
+                yield SoundCloud._parse_api_track(t, artist_url=artist_url)
+                collected += 1
 
     @staticmethod
     def _extract_streams(track_url, prefered_ext=None, verbose=False):

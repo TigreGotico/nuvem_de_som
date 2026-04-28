@@ -1,25 +1,28 @@
 """Tests for SoundCloud.get_tracks_full().
 
-get_tracks_full() uses yt-dlp's flat extraction to paginate through an artist
-or set page via SoundCloud's internal API.  Unlike get_tracks() — which scrapes
-HTML and is capped at ~20 items — this method retrieves the complete catalogue.
+get_tracks_full() uses SoundCloud's API v2 (client_id auto-managed by yt-dlp)
+to paginate through an artist or set page.  Unlike get_tracks() — which scrapes
+HTML and is capped at ~20 items — this method retrieves the complete catalogue
+with full metadata: real artist display name, per-track artwork, and duration.
 
 These tests are integration tests: they hit the real SoundCloud API, so they
 require a live network connection and may be slow.  Run selectively with::
 
-    pytest test/test_get_tracks_full.py -v
+    pytest test/test_get_tracks_full.py -v -m integration
 """
 import pytest
 from nuvem_de_som import SoundCloud
 
 
 ARTIST_URL = "https://soundcloud.com/acidkid"
+# acidkid is the URL slug; the real display name returned by the API is "Piratech"
+ARTIST_DISPLAY_NAME = "Piratech"
 SET_URL = "https://soundcloud.com/acidkid/sets/acid"
 
 
-def _required_keys(track: dict) -> None:
-    assert "title" in track, "track missing 'title'"
-    assert "url" in track, "track missing 'url'"
+def _assert_track(track: dict) -> None:
+    for key in ("title", "url", "artist", "artist_url", "image", "duration"):
+        assert key in track, f"track missing expected key: {key!r}"
     assert track["url"].startswith("https://soundcloud.com/"), (
         f"unexpected url: {track['url']}"
     )
@@ -30,7 +33,7 @@ def test_get_tracks_full_returns_tracks():
     tracks = list(SoundCloud.get_tracks_full(ARTIST_URL, limit=50))
     assert len(tracks) > 0, "expected at least one track"
     for t in tracks:
-        _required_keys(t)
+        _assert_track(t)
 
 
 @pytest.mark.integration
@@ -44,22 +47,30 @@ def test_get_tracks_full_more_than_html_scrape():
 
 
 @pytest.mark.integration
+def test_get_tracks_full_real_artist_name():
+    """API returns the display name, not the URL slug."""
+    tracks = list(SoundCloud.get_tracks_full(ARTIST_URL, limit=5))
+    assert tracks, "no tracks returned"
+    assert tracks[0]["artist"] == ARTIST_DISPLAY_NAME, (
+        f"expected artist {ARTIST_DISPLAY_NAME!r}, got {tracks[0]['artist']!r}"
+    )
+
+
+@pytest.mark.integration
+def test_get_tracks_full_has_artwork_and_duration():
+    tracks = list(SoundCloud.get_tracks_full(ARTIST_URL, limit=5))
+    assert tracks, "no tracks returned"
+    # At least some tracks should have artwork and duration
+    assert any(t["image"] for t in tracks), "expected at least one track with artwork"
+    assert any(t["duration"] for t in tracks), "expected at least one track with duration"
+
+
+@pytest.mark.integration
 def test_get_tracks_full_set_url():
     tracks = list(SoundCloud.get_tracks_full(SET_URL, limit=50))
     assert len(tracks) > 0, "expected at least one track in set"
     for t in tracks:
-        _required_keys(t)
-
-
-@pytest.mark.integration
-def test_get_tracks_full_track_fields():
-    tracks = list(SoundCloud.get_tracks_full(ARTIST_URL, limit=5))
-    assert tracks, "no tracks returned"
-    t = tracks[0]
-    # These fields come from yt-dlp flat extraction; they may be empty strings
-    # but the keys must be present so callers can rely on them
-    for key in ("title", "url", "artist", "image", "duration"):
-        assert key in t, f"track missing expected key: {key!r}"
+        _assert_track(t)
 
 
 @pytest.mark.integration

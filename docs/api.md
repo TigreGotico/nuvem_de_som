@@ -66,9 +66,9 @@ for t in SoundCloud.get_tracks("https://soundcloud.com/acidkid"):
 
 ### `get_tracks_full(url, limit=200)`
 
-Enumerate **all** tracks on an artist page or set URL using yt-dlp flat extraction.
+Enumerate **all** tracks on an artist page or set URL using SoundCloud's API v2.
 
-Unlike `get_tracks()`, this method goes through SoundCloud's internal API (via yt-dlp) and paginates until `limit` items have been collected or the catalogue is exhausted. Each yielded dict always contains `title`, `url`, `artist`, `image`, and `duration` keys.
+Unlike `get_tracks()`, this method paginates through the complete catalogue via SoundCloud's internal API (client_id auto-managed by yt-dlp, refreshed on expiry). Each yielded dict always contains `title`, `url`, `artist`, `artist_url`, `image`, and `duration` keys — including the artist's real display name (e.g. `"Piratech"` rather than the URL slug `"acidkid"`), per-track artwork, and duration in seconds.
 
 ```python
 for t in SoundCloud.get_tracks_full("https://soundcloud.com/acidkid"):
@@ -99,7 +99,14 @@ for t in SoundCloud.get_tracks_full("https://soundcloud.com/acidkid/sets/acid"):
 
 `get_tracks_full()` (always):
 ```python
-{"title": str, "url": str, "artist": str, "image": str, "duration": int | None, "artist_url": str | None}
+{
+    "title": str,        # track title
+    "url": str,          # SoundCloud permalink
+    "artist": str,       # display name (e.g. "Piratech", not URL slug "acidkid")
+    "artist_url": str,   # artist profile permalink
+    "image": str,        # artwork URL (falls back to user avatar if no track art)
+    "duration": int | None,  # seconds
+}
 ```
 
 `uri` (direct audio stream URL) is only present in `extract_streams=True` results; it is **not** in `get_tracks_full()` output — obtain it lazily via `_extract_streams(url)` at playback time.

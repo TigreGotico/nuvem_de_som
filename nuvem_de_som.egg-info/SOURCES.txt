@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+nuvem_de_som/__init__.py
+nuvem_de_som/version.py
+nuvem_de_som.egg-info/PKG-INFO
+nuvem_de_som.egg-info/SOURCES.txt
+nuvem_de_som.egg-info/dependency_links.txt
+nuvem_de_som.egg-info/requires.txt
+nuvem_de_som.egg-info/top_level.txt
+test/test_get_tracks_full.py
+test/test_import.py
