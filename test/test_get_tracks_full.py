@@ -80,3 +80,26 @@ def test_get_tracks_full_respects_limit():
     assert len(tracks) <= limit, (
         f"expected at most {limit} tracks, got {len(tracks)}"
     )
+
+
+@pytest.mark.integration
+def test_search_tracks_api_returns_full_metadata():
+    tracks = list(SoundCloud.search_tracks_api("piratech", limit=5))
+    assert len(tracks) > 0, "expected at least one result"
+    for t in tracks:
+        for key in ("title", "url", "artist", "artist_url", "image", "duration"):
+            assert key in t, f"track missing key {key!r}"
+        assert t["url"].startswith("https://soundcloud.com/"), f"bad url: {t['url']}"
+    assert any(t["image"] for t in tracks), "expected at least one track with artwork"
+    assert any(t["duration"] for t in tracks), "expected at least one track with duration"
+
+
+@pytest.mark.integration
+def test_search_people_api_returns_full_metadata():
+    people = list(SoundCloud.search_people_api("piratech", limit=5))
+    assert len(people) > 0, "expected at least one result"
+    for p in people:
+        for key in ("artist", "artist_url", "image"):
+            assert key in p, f"person missing key {key!r}"
+        assert p["artist_url"].startswith("https://soundcloud.com/"), f"bad url: {p['artist_url']}"
+    assert any(p["image"] for p in people), "expected at least one artist with image"
