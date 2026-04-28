@@ -9,9 +9,10 @@ description = "SoundCloud search and stream extractor"
 license = { text = "Apache-2.0" }
 authors = [{ name = "JarbasAi" }]
 requires-python = ">=3.8"
-dependencies = ["bs4", "yt-dlp", "requests"]
+dependencies = ["bs4", "requests"]
 
 [project.optional-dependencies]
+streams = ["yt-dlp"]
 test = ["pytest"]
 
 [project.urls]
