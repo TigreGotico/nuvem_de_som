@@ -84,7 +84,7 @@ def test_get_tracks_full_respects_limit():
 
 @pytest.mark.integration
 def test_search_tracks_api_returns_full_metadata():
-    tracks = list(SoundCloud.search_tracks_api("piratech", limit=5))
+    tracks = list(SoundCloud.search_tracks_api("nuclear chill", limit=5))
     assert len(tracks) > 0, "expected at least one result"
     for t in tracks:
         for key in ("title", "url", "artist", "artist_url", "image", "duration"):
