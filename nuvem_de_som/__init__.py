@@ -187,7 +187,22 @@ class SoundCloudBase(ABC):
 
     @abstractmethod
     def resolve_user(self, profile_url: str) -> dict | None:
-        """Resolve a profile URL to ``{"artist", "artist_url", "image"}`` or None."""
+        """Resolve a profile URL.
+
+        Returns a dict with ``artist``, ``artist_url``, ``image``, and
+        ``user_id`` (numeric SoundCloud user id, when the backend can
+        recover it), or ``None``.
+        """
+
+    @abstractmethod
+    def resolve_track(self, track_url: str) -> dict | None:
+        """Resolve a track permalink URL to its full track dict.
+
+        Same shape as ``_parse_track`` / ``search_tracks`` items —
+        ``title``, ``url``, ``artist``, ``artist_url``, ``image``,
+        ``duration``, ``track_id``, ``user_id``. Returns ``None`` when
+        the URL doesn't resolve to a track.
+        """
 
     # -- concrete shared -----------------------------------------------------
 
@@ -358,9 +373,21 @@ class SoundCloudAPI(SoundCloudBase):
                 "artist": u.get("username") or "",
                 "artist_url": u.get("permalink_url") or profile_url,
                 "image": u.get("avatar_url") or "",
+                "user_id": u.get("id"),
             }
         except Exception as exc:
             log.debug("resolve_user failed for %s: %s", profile_url, exc)
+            return None
+
+    def resolve_track(self, track_url: str) -> dict | None:
+        """Resolve a track URL to its full track dict via API v2."""
+        try:
+            t = self._call("https://api-v2.soundcloud.com/resolve", url=track_url)
+            if t.get("kind") != "track":
+                return None
+            return self._parse_track(t)
+        except Exception as exc:
+            log.debug("resolve_track failed for %s: %s", track_url, exc)
             return None
 
     # -- download (pure requests, no yt-dlp) ---------------------------------
@@ -642,10 +669,41 @@ class SoundCloudHTML(SoundCloudBase):
 
             if not artist:
                 return None
-            return {"artist": artist, "artist_url": profile_url, "image": image or ""}
+            return {"artist": artist, "artist_url": profile_url,
+                    "image": image or "", "user_id": None}
         except Exception as exc:
             log.debug("HTML resolve_user failed for %s: %s", profile_url, exc)
             return None
+
+    def resolve_track(self, track_url: str) -> dict | None:
+        """Best-effort scrape of a track page — no numeric ids.
+
+        SoundCloud doesn't expose the track id in plain HTML in a stable
+        location, so this backend returns ``track_id``/``user_id`` as
+        ``None``. Callers needing the numeric id should let the
+        :class:`SoundCloud` orchestrator fall through to the API v2 or
+        yt-dlp backends.
+        """
+        try:
+            meta = self.get_track_meta(track_url)
+        except Exception as exc:
+            log.debug("HTML resolve_track failed for %s: %s", track_url, exc)
+            return None
+        if not meta:
+            return None
+        soup = self._get_soup(track_url)
+        og_title = soup.find("meta", property="og:title")
+        title = og_title.get("content", "").strip() if og_title else ""
+        return {
+            "title": title,
+            "url": track_url,
+            "artist": meta.get("artist") or "",
+            "artist_url": "",
+            "image": meta.get("image") or "",
+            "duration": None,
+            "track_id": None,
+            "user_id": None,
+        }
 
     # -- HTML-specific helpers -----------------------------------------------
 
@@ -794,12 +852,48 @@ class SoundCloudYTDLP(SoundCloudBase):
                 "artist": uploader,
                 "artist_url": profile_url,
                 "image": info.get("thumbnail") or "",
+                "user_id": info.get("uploader_id") or None,
             }
         except ImportError:
             raise
         except Exception as exc:
             log.debug("yt-dlp resolve_user failed for %s: %s", profile_url, exc)
             return None
+
+    def resolve_track(self, track_url: str) -> dict | None:
+        """Resolve a track URL via yt-dlp metadata extraction.
+
+        Backends without a v2 ``/resolve`` endpoint fall back to yt-dlp's
+        full metadata pull. The ``track_id`` is what SoundCloud's HTML
+        encodes via ``soundcloud:tracks:<id>``.
+        """
+        try:
+            yt_dlp = _ydl_import()
+            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+                info = ydl.extract_info(track_url, download=False) or {}
+        except ImportError:
+            raise
+        except Exception as exc:
+            log.debug("yt-dlp resolve_track failed for %s: %s", track_url, exc)
+            return None
+        if not info or info.get("extractor_key", "").lower().startswith("soundcloud") is False:
+            # Pass-through other extractors too — caller asked us to resolve.
+            pass
+        track_id = info.get("id")
+        try:
+            track_id = int(track_id) if track_id is not None else None
+        except (TypeError, ValueError):
+            pass
+        return {
+            "title": info.get("title") or "",
+            "url": info.get("webpage_url") or track_url,
+            "artist": info.get("uploader") or info.get("artist") or "",
+            "artist_url": info.get("uploader_url") or "",
+            "image": info.get("thumbnail") or "",
+            "duration": info.get("duration"),
+            "track_id": track_id,
+            "user_id": info.get("uploader_id") or None,
+        }
 
     # -- download ------------------------------------------------------------
 
@@ -929,6 +1023,9 @@ class SoundCloud(SoundCloudBase):
 
     def resolve_user(self, profile_url: str) -> dict | None:
         return self._try_each_value("resolve_user", profile_url)
+
+    def resolve_track(self, track_url: str) -> dict | None:
+        return self._try_each_value("resolve_track", track_url)
 
     # -- downloads (API first, yt-dlp fallback) ------------------------------
 
