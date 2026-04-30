@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0a1](https://github.com/TigreGotico/nuvem_de_som/tree/0.3.0a1) (2026-04-30)
+
+[Full Changelog](https://github.com/TigreGotico/nuvem_de_som/compare/0.2.0a1...0.3.0a1)
+
+**Merged pull requests:**
+
+- feat: surface user\_id from resolve\_user; add resolve\_track\(url\) [\#13](https://github.com/TigreGotico/nuvem_de_som/pull/13) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.2.0a1](https://github.com/TigreGotico/nuvem_de_som/tree/0.2.0a1) (2026-04-30)
 
 [Full Changelog](https://github.com/TigreGotico/nuvem_de_som/compare/0.1.0a1...0.2.0a1)
