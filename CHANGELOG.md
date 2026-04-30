@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0a1](https://github.com/TigreGotico/nuvem_de_som/tree/0.2.0a1) (2026-04-30)
+
+[Full Changelog](https://github.com/TigreGotico/nuvem_de_som/compare/0.1.0a1...0.2.0a1)
+
+**Merged pull requests:**
+
+- feat: surface canonical SoundCloud IDs in all results [\#11](https://github.com/TigreGotico/nuvem_de_som/pull/11) ([JarbasAl](https://github.com/JarbasAl))
+
 ## [0.1.0a1](https://github.com/TigreGotico/nuvem_de_som/tree/0.1.0a1) (2026-04-28)
 
 [Full Changelog](https://github.com/TigreGotico/nuvem_de_som/compare/0.0.2...0.1.0a1)
