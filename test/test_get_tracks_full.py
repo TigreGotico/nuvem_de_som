@@ -131,3 +131,29 @@ def test_api_resolve_user():
         f"expected {ARTIST_DISPLAY_NAME!r}, got {info['artist']!r}"
     )
     assert info["artist_url"].startswith("https://soundcloud.com/")
+    assert info.get("user_id"), "resolve_user must surface the numeric user_id"
+    assert isinstance(info["user_id"], int)
+
+
+@pytest.mark.integration
+def test_api_resolve_track():
+    """A track URL must round-trip into the same dict shape as search_tracks."""
+    sc = SoundCloudAPI()
+    # Pick the first published track of the canonical test artist.
+    tracks = list(sc.get_tracks(ARTIST_URL, limit=1))
+    assert tracks, "no tracks for canonical artist; cannot test resolve_track"
+    track_url = tracks[0]["url"]
+    info = sc.resolve_track(track_url)
+    assert info is not None, f"resolve_track returned None for {track_url}"
+    for key in ("title", "url", "artist", "artist_url",
+                "image", "duration", "track_id", "user_id"):
+        assert key in info, f"resolve_track missing {key}"
+    assert isinstance(info["track_id"], int)
+    assert isinstance(info["user_id"], int)
+
+
+@pytest.mark.integration
+def test_api_resolve_track_returns_none_for_user_url():
+    """A user permalink fed to resolve_track must return None, not a track dict."""
+    sc = SoundCloudAPI()
+    assert sc.resolve_track(ARTIST_URL) is None
