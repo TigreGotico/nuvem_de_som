@@ -247,6 +247,8 @@ class SoundCloudAPI(SoundCloudBase):
             "artist_url": artist_url or user.get("permalink_url") or "",
             "image": image,
             "duration": duration,
+            "track_id": t.get("id"),
+            "user_id": user.get("id"),
         }
 
     def search_tracks(self, query: str, limit: int = 10) -> Iterator[dict]:
@@ -265,6 +267,7 @@ class SoundCloudAPI(SoundCloudBase):
                 "artist": u.get("username") or "",
                 "artist_url": u.get("permalink_url") or "",
                 "image": u.get("avatar_url") or "",
+                "user_id": u.get("id"),
             }
 
     def search_sets(self, query: str, limit: int = 10) -> Iterator[dict]:
@@ -279,6 +282,8 @@ class SoundCloudAPI(SoundCloudBase):
                 "artist": user.get("username") or "",
                 "artist_url": user.get("permalink_url") or "",
                 "image": p.get("artwork_url") or user.get("avatar_url") or "",
+                "playlist_id": p.get("id"),
+                "user_id": user.get("id"),
             }
 
     def get_tracks(self, url: str, limit: int = 200) -> Iterator[dict]:
@@ -510,6 +515,8 @@ class SoundCloudHTML(SoundCloudBase):
                 "artist_url": "",
                 "image": "",
                 "duration": None,
+                "track_id": None,
+                "user_id": None,
             }
 
     def search_people(self, query: str, limit: int = 10) -> Iterator[dict]:
@@ -527,6 +534,7 @@ class SoundCloudHTML(SoundCloudBase):
                 "artist": a.get_text(strip=True),
                 "artist_url": href,
                 "image": "",
+                "user_id": None,
             }
 
     def search_sets(self, query: str, limit: int = 10) -> Iterator[dict]:
@@ -546,6 +554,8 @@ class SoundCloudHTML(SoundCloudBase):
                 "artist": "",
                 "artist_url": "",
                 "image": "",
+                "playlist_id": None,
+                "user_id": None,
             }
 
     def get_tracks(self, url: str, limit: int = 20) -> Iterator[dict]:
@@ -588,6 +598,8 @@ class SoundCloudHTML(SoundCloudBase):
                     "artist_url": artist_href,
                     "image": "",
                     "duration": duration,
+                    "track_id": None,
+                    "user_id": None,
                 }
                 collected += 1
             except Exception as exc:
@@ -710,6 +722,11 @@ class SoundCloudYTDLP(SoundCloudBase):
 
     @staticmethod
     def _entry_to_track(entry: dict, artist_url: str = "") -> dict:
+        raw_id = entry.get("id")
+        try:
+            track_id = int(raw_id) if raw_id is not None else None
+        except (TypeError, ValueError):
+            track_id = None
         return {
             "title": entry.get("title") or "",
             "url": entry.get("url") or entry.get("webpage_url") or "",
@@ -717,6 +734,8 @@ class SoundCloudYTDLP(SoundCloudBase):
             "artist_url": artist_url,
             "image": entry.get("thumbnail") or "",
             "duration": entry.get("duration"),
+            "track_id": track_id,
+            "user_id": None,
         }
 
     def search_tracks(self, query: str, limit: int = 10) -> Iterator[dict]:
