@@ -107,7 +107,7 @@ class TestParseTrack:
 class TestHTMLSearchTracksKeySet:
     """All track dicts from HTML backend must have the canonical key schema."""
 
-    CANONICAL_KEYS = {"title", "url", "artist", "artist_url", "image", "duration"}
+    CANONICAL_KEYS = {"title", "url", "artist", "artist_url", "image", "duration", "track_id", "user_id"}
 
     def _fake_soup_h2(self, href="/user/track", text="Track Title"):
         from bs4 import BeautifulSoup
